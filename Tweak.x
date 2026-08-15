@@ -1,7 +1,6 @@
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-// Add seconds to a date-format string by expanding the minutes field.
 static NSString *withSeconds(NSString *fmt) {
     if (!fmt || [fmt containsString:@"ss"]) return fmt;
     if ([fmt containsString:@"mm"]) return [fmt stringByReplacingOccurrencesOfString:@"mm" withString:@"mm:ss"];
@@ -10,8 +9,6 @@ static NSString *withSeconds(NSString *fmt) {
 }
 
 %hook SBStatusBarStateAggregator
-
-// Whenever the formatters are (re)built, inject seconds into them.
 - (void)_resetTimeItemFormatter {
     %orig;
     @try {
@@ -21,22 +18,36 @@ static NSString *withSeconds(NSString *fmt) {
         }
     } @catch (__unused NSException *e) {}
 }
-
-// The stock timer fires on the minute; replace it with a 1s repeating timer
-// so the string (now containing seconds) refreshes every second.
 - (void)_restartTimeItemTimer {
     %orig;
     @try {
         NSTimer *old = [(id)self valueForKey:@"_timeItemTimer"];
         if (old) [old invalidate];
-        NSTimer *t = [NSTimer timerWithTimeInterval:1.0
-                                             target:self
-                                           selector:@selector(_updateTimeItems)
-                                           userInfo:nil
-                                            repeats:YES];
+        NSTimer *t = [NSTimer timerWithTimeInterval:1.0 target:self selector:@selector(_updateTimeItems) userInfo:nil repeats:YES];
         [[NSRunLoop mainRunLoop] addTimer:t forMode:NSRunLoopCommonModes];
         [(id)self setValue:t forKey:@"_timeItemTimer"];
     } @catch (__unused NSException *e) {}
 }
+%end
 
+// DIAGNOSTIC: find which view renders the time and its font/ivars
+%hook _UIStatusBarStringView
+- (void)setText:(NSString *)text {
+    %orig;
+    @try {
+        if (text && [text containsString:@":"] && text.length <= 12) {
+            static BOOL logged = NO;
+            if (!logged) {
+                logged = YES;
+                NSMutableString *s = [NSMutableString string];
+                [s appendFormat:@"class=%@ text='%@'\n", [self class], text];
+                @try { [s appendFormat:@"font(valueForKey _font)=%@\n", [(id)self valueForKey:@"_font"]]; } @catch(...){}
+                unsigned ic=0; Ivar *iv=class_copyIvarList([self class],&ic);
+                for(unsigned i=0;i<ic;i++) [s appendFormat:@"%s : %s\n", ivar_getName(iv[i]), ivar_getTypeEncoding(iv[i])];
+                free(iv);
+                [s writeToFile:@"/var/jb/tmp/clockfont.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+            }
+        }
+    } @catch (__unused NSException *e) {}
+}
 %end
