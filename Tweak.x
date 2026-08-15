@@ -30,24 +30,22 @@ static NSString *withSeconds(NSString *fmt) {
 }
 %end
 
-// DIAGNOSTIC: find which view renders the time and its font/ivars
-%hook _UIStatusBarStringView
-- (void)setText:(NSString *)text {
-    %orig;
-    @try {
-        if (text && [text containsString:@":"] && text.length <= 12) {
-            static BOOL logged = NO;
-            if (!logged) {
-                logged = YES;
-                NSMutableString *s = [NSMutableString string];
-                [s appendFormat:@"class=%@ text='%@'\n", [(id)self class], text];
-                @try { [s appendFormat:@"font(valueForKey _font)=%@\n", [(id)self valueForKey:@"_font"]]; } @catch(...){}
-                unsigned ic=0; Ivar *iv=class_copyIvarList([(id)self class],&ic);
-                for(unsigned i=0;i<ic;i++) [s appendFormat:@"%s : %s\n", ivar_getName(iv[i]), ivar_getTypeEncoding(iv[i])];
-                free(iv);
-                [s writeToFile:@"/var/jb/tmp/clockfont.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+%ctor {
+    @autoreleasepool {
+        @try {
+            NSMutableString *out = [NSMutableString string];
+            unsigned int n=0; Class *all=objc_copyClassList(&n);
+            for(unsigned i=0;i<n;i++){
+                const char *cn = class_getName(all[i]);
+                if(!cn) continue;
+                NSString *c = [NSString stringWithUTF8String:cn];
+                NSString *lc = [c lowercaseString];
+                BOOL timey = [lc containsString:@"time"] || [lc containsString:@"clock"] || [lc containsString:@"date"];
+                BOOL viewy = [lc containsString:@"view"] || [lc containsString:@"label"] || [c hasPrefix:@"STUIStatusBar"] || [c hasPrefix:@"_UIStatusBar"];
+                if(timey && viewy) [out appendFormat:@"%@\n", c];
             }
-        }
-    } @catch (__unused NSException *e) {}
+            free(all);
+            [out writeToFile:@"/var/jb/tmp/clockclasses.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        } @catch (__unused NSException *e) {}
+    }
 }
-%end
