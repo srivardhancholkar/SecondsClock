@@ -40,9 +40,9 @@ static NSString *withSeconds(NSString *fmt) {
             if (!logged) {
                 logged = YES;
                 NSMutableString *s = [NSMutableString string];
-                [s appendFormat:@"class=%@ text='%@'\n", [self class], text];
+                [s appendFormat:@"class=%@ text='%@'\n", [(id)self class], text];
                 @try { [s appendFormat:@"font(valueForKey _font)=%@\n", [(id)self valueForKey:@"_font"]]; } @catch(...){}
-                unsigned ic=0; Ivar *iv=class_copyIvarList([self class],&ic);
+                unsigned ic=0; Ivar *iv=class_copyIvarList([(id)self class],&ic);
                 for(unsigned i=0;i<ic;i++) [s appendFormat:@"%s : %s\n", ivar_getName(iv[i]), ivar_getTypeEncoding(iv[i])];
                 free(iv);
                 [s writeToFile:@"/var/jb/tmp/clockfont.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
