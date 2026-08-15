@@ -30,19 +30,32 @@ static NSString *withSeconds(NSString *fmt) {
 }
 %end
 
-static void dumpCls(NSMutableString *o,const char*n){
-    Class c=objc_getClass(n); if(!c){[o appendFormat:@"(%s nil)\n",n];return;}
-    [o appendFormat:@"\n===== %s methods =====\n",n];
-    unsigned m=0;Method*ms=class_copyMethodList(c,&m);
-    for(unsigned i=0;i<m;i++)[o appendFormat:@"%s\n",sel_getName(method_getName(ms[i]))];free(ms);
-    [o appendFormat:@"----- %s ivars -----\n",n];
-    unsigned k=0;Ivar*iv=class_copyIvarList(c,&k);
-    for(unsigned i=0;i<k;i++)[o appendFormat:@"%s : %s\n",ivar_getName(iv[i]),ivar_getTypeEncoding(iv[i])];free(iv);
+// Give the status-bar clock tabular (monospaced) digits so it doesn't jitter.
+%hook _UIStatusBarStringView
+- (void)applyStyleAttributes:(id)attrs {
+    @try {
+        NSString *ot = nil;
+        @try { ot = [(id)self valueForKey:@"_originalText"]; } @catch(...){}
+        if (ot && ot.length<=12 && [ot containsString:@":"] && attrs) {
+            UIFont *f = nil;
+            @try { f = [attrs valueForKey:@"font"]; } @catch(...){}
+            if (f) {
+                UIFontDescriptor *d = [f.fontDescriptor fontDescriptorByAddingAttributes:@{
+                    UIFontDescriptorFeatureSettingsAttribute: @[@{
+                        UIFontFeatureTypeIdentifierKey: @(6),      // kNumberSpacingType
+                        UIFontFeatureSelectorIdentifierKey: @(0)   // kMonospacedNumbersSelector
+                    }]}];
+                UIFont *mono = [UIFont fontWithDescriptor:d size:f.pointSize];
+                if (mono) { @try { [attrs setValue:mono forKey:@"font"]; } @catch(...){} }
+                // one-time confirmation
+                static BOOL logged=NO;
+                if(!logged){ logged=YES;
+                    [[NSString stringWithFormat:@"HIT applyStyleAttributes ot='%@' font=%@ attrsClass=%@\n", ot, f, NSStringFromClass([attrs class])]
+                     writeToFile:@"/var/jb/tmp/mono.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                }
+            }
+        }
+    } @catch (__unused NSException *e) {}
+    %orig(attrs);
 }
-%ctor {
-    @autoreleasepool { @try {
-        NSMutableString *o=[NSMutableString string];
-        dumpCls(o,"_UIStatusBarStringView");
-        [o writeToFile:@"/var/jb/tmp/sbstring.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    } @catch (__unused NSException *e) {} }
-}
+%end
