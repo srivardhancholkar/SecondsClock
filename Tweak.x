@@ -30,6 +30,27 @@ static NSString *withSeconds(NSString *fmt) {
 }
 %end
 
+%hook UILabel
+- (void)setText:(NSString *)text {
+    %orig;
+    @try {
+        if (text.length>=4 && text.length<=12 && [text containsString:@":"]) {
+            unichar c0=[text characterAtIndex:0];
+            if (c0>='0' && c0<='9') {
+                static BOOL logged=NO;
+                if(!logged){ logged=YES;
+                    NSMutableString *o=[NSMutableString string];
+                    [o appendFormat:@"label class=%@ text='%@'\n", [(id)self class], text];
+                    [o appendFormat:@"font=%@\n", [(id)self font]];
+                    UIView *v=(UIView*)self; int d=0;
+                    while(v && d<8){ [o appendFormat:@"  ^ %@\n", [v class]]; v=[v superview]; d++; }
+                    [o writeToFile:@"/var/jb/tmp/clocklabel.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                }
+            }
+        }
+    } @catch (__unused NSException *e) {}
+}
+%end
 %ctor {
     @autoreleasepool {
         @try {
