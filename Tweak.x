@@ -30,48 +30,19 @@ static NSString *withSeconds(NSString *fmt) {
 }
 %end
 
-%hook UILabel
-- (void)setText:(NSString *)text {
-    %orig;
-    @try {
-        if (text.length>=4 && text.length<=12 && [text containsString:@":"]) {
-            unichar c0=[text characterAtIndex:0];
-            UIFont *fnt=[(id)self font];
-            if (c0>='0' && c0<='9' && fnt.pointSize < 40) {
-                NSString *cls=NSStringFromClass([(id)self class]);
-                static NSMutableSet *seen=nil; if(!seen) seen=[NSMutableSet set];
-                NSString *key=[NSString stringWithFormat:@"%@|%.0f", cls, fnt.pointSize];
-                if(![seen containsObject:key]){ [seen addObject:key];
-                    NSMutableString *o=[NSMutableString string];
-                    NSData *d=[NSData dataWithContentsOfFile:@"/var/jb/tmp/clocklabel.txt"];
-                    if(d){ [o appendString:[[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding]]; }
-                    [o appendFormat:@"=== %@  size=%.1f  text='%@'\n", cls, fnt.pointSize, text];
-                    [o appendFormat:@"    font=%@\n", fnt];
-                    UIView *v=(UIView*)self; int dd=0;
-                    while(v && dd<7){ [o appendFormat:@"    ^ %@\n", NSStringFromClass([v class])]; v=[v superview]; dd++; }
-                    [o writeToFile:@"/var/jb/tmp/clocklabel.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                }
-            }
-        }
-    } @catch (__unused NSException *e) {}
+static void dumpCls(NSMutableString *o,const char*n){
+    Class c=objc_getClass(n); if(!c){[o appendFormat:@"(%s nil)\n",n];return;}
+    [o appendFormat:@"\n===== %s methods =====\n",n];
+    unsigned m=0;Method*ms=class_copyMethodList(c,&m);
+    for(unsigned i=0;i<m;i++)[o appendFormat:@"%s\n",sel_getName(method_getName(ms[i]))];free(ms);
+    [o appendFormat:@"----- %s ivars -----\n",n];
+    unsigned k=0;Ivar*iv=class_copyIvarList(c,&k);
+    for(unsigned i=0;i<k;i++)[o appendFormat:@"%s : %s\n",ivar_getName(iv[i]),ivar_getTypeEncoding(iv[i])];free(iv);
 }
-%end
 %ctor {
-    @autoreleasepool {
-        @try {
-            NSMutableString *out = [NSMutableString string];
-            unsigned int n=0; Class *all=objc_copyClassList(&n);
-            for(unsigned i=0;i<n;i++){
-                const char *cn = class_getName(all[i]);
-                if(!cn) continue;
-                NSString *c = [NSString stringWithUTF8String:cn];
-                NSString *lc = [c lowercaseString];
-                BOOL timey = [lc containsString:@"time"] || [lc containsString:@"clock"] || [lc containsString:@"date"];
-                BOOL viewy = [lc containsString:@"view"] || [lc containsString:@"label"] || [c hasPrefix:@"STUIStatusBar"] || [c hasPrefix:@"_UIStatusBar"];
-                if(timey && viewy) [out appendFormat:@"%@\n", c];
-            }
-            free(all);
-            [out writeToFile:@"/var/jb/tmp/clockclasses.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        } @catch (__unused NSException *e) {}
-    }
+    @autoreleasepool { @try {
+        NSMutableString *o=[NSMutableString string];
+        dumpCls(o,"_UIStatusBarStringView");
+        [o writeToFile:@"/var/jb/tmp/sbstring.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    } @catch (__unused NSException *e) {} }
 }
