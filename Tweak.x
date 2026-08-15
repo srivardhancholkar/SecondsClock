@@ -1,32 +1,42 @@
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
-#import <string.h>
 
-static void dumpClass(NSMutableString *s, const char *clsname) {
-    Class c = objc_getClass(clsname);
-    if (!c) { [s appendFormat:@"\n(%s NOT FOUND)\n", clsname]; return; }
-    [s appendFormat:@"\n===== %s methods =====\n", clsname];
-    unsigned mc=0; Method *ms=class_copyMethodList(c,&mc);
-    for(unsigned i=0;i<mc;i++) [s appendFormat:@"%s\n", sel_getName(method_getName(ms[i]))];
-    free(ms);
-    [s appendFormat:@"----- %s ivars -----\n", clsname];
-    unsigned ic=0; Ivar *iv=class_copyIvarList(c,&ic);
-    for(unsigned i=0;i<ic;i++) [s appendFormat:@"%s : %s\n", ivar_getName(iv[i]), ivar_getTypeEncoding(iv[i])];
-    free(iv);
+// Add seconds to a date-format string by expanding the minutes field.
+static NSString *withSeconds(NSString *fmt) {
+    if (!fmt || [fmt containsString:@"ss"]) return fmt;
+    if ([fmt containsString:@"mm"]) return [fmt stringByReplacingOccurrencesOfString:@"mm" withString:@"mm:ss"];
+    if ([fmt containsString:@"m"])  return [fmt stringByReplacingOccurrencesOfString:@"m"  withString:@"m:ss"];
+    return fmt;
 }
 
-%ctor {
-    @autoreleasepool {
-        @try {
-            NSMutableString *s = [NSMutableString string];
-            [s appendFormat:@"proc=%@\n", [NSProcessInfo processInfo].processName];
-            unsigned int n=0; Class *all=objc_copyClassList(&n);
-            [s appendString:@"== classes with Time/Clock ==\n"];
-            for(unsigned i=0;i<n;i++){ const char*cn=class_getName(all[i]);
-                if(cn && (strcasestr(cn,"statusbar")&&(strcasestr(cn,"time")||strcasestr(cn,"clock")))) [s appendFormat:@"%s\n",cn]; }
-            free(all);
-            dumpClass(s,"SBStatusBarStateAggregator");
-            [s writeToFile:@"/var/jb/tmp/clock_dump.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        } @catch (__unused NSException *e) {}
-    }
+%hook SBStatusBarStateAggregator
+
+// Whenever the formatters are (re)built, inject seconds into them.
+- (void)_resetTimeItemFormatter {
+    %orig;
+    @try {
+        for (NSString *k in @[@"_timeItemDateFormatter", @"_shortTimeItemDateFormatter"]) {
+            NSDateFormatter *f = [self valueForKey:k];
+            if (f) f.dateFormat = withSeconds(f.dateFormat);
+        }
+    } @catch (__unused NSException *e) {}
 }
+
+// The stock timer fires on the minute; replace it with a 1s repeating timer
+// so the string (now containing seconds) refreshes every second.
+- (void)_restartTimeItemTimer {
+    %orig;
+    @try {
+        NSTimer *old = [self valueForKey:@"_timeItemTimer"];
+        if (old) [old invalidate];
+        NSTimer *t = [NSTimer timerWithTimeInterval:1.0
+                                             target:self
+                                           selector:@selector(_updateTimeItems)
+                                           userInfo:nil
+                                            repeats:YES];
+        [[NSRunLoop mainRunLoop] addTimer:t forMode:NSRunLoopCommonModes];
+        [self setValue:t forKey:@"_timeItemTimer"];
+    } @catch (__unused NSException *e) {}
+}
+
+%end
