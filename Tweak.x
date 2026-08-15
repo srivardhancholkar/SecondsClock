@@ -36,14 +36,19 @@ static NSString *withSeconds(NSString *fmt) {
     @try {
         if (text.length>=4 && text.length<=12 && [text containsString:@":"]) {
             unichar c0=[text characterAtIndex:0];
-            if (c0>='0' && c0<='9') {
-                static BOOL logged=NO;
-                if(!logged){ logged=YES;
+            UIFont *fnt=[(id)self font];
+            if (c0>='0' && c0<='9' && fnt.pointSize < 40) {
+                NSString *cls=NSStringFromClass([(id)self class]);
+                static NSMutableSet *seen=nil; if(!seen) seen=[NSMutableSet set];
+                NSString *key=[NSString stringWithFormat:@"%@|%.0f", cls, fnt.pointSize];
+                if(![seen containsObject:key]){ [seen addObject:key];
                     NSMutableString *o=[NSMutableString string];
-                    [o appendFormat:@"label class=%@ text='%@'\n", [(id)self class], text];
-                    [o appendFormat:@"font=%@\n", [(id)self font]];
-                    UIView *v=(UIView*)self; int d=0;
-                    while(v && d<8){ [o appendFormat:@"  ^ %@\n", [v class]]; v=[v superview]; d++; }
+                    NSData *d=[NSData dataWithContentsOfFile:@"/var/jb/tmp/clocklabel.txt"];
+                    if(d){ [o appendString:[[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding]]; }
+                    [o appendFormat:@"=== %@  size=%.1f  text='%@'\n", cls, fnt.pointSize, text];
+                    [o appendFormat:@"    font=%@\n", fnt];
+                    UIView *v=(UIView*)self; int dd=0;
+                    while(v && dd<7){ [o appendFormat:@"    ^ %@\n", NSStringFromClass([v class])]; v=[v superview]; dd++; }
                     [o writeToFile:@"/var/jb/tmp/clocklabel.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
                 }
             }
