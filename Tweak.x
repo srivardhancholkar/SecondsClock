@@ -16,7 +16,7 @@ static NSString *withSeconds(NSString *fmt) {
     %orig;
     @try {
         for (NSString *k in @[@"_timeItemDateFormatter", @"_shortTimeItemDateFormatter"]) {
-            NSDateFormatter *f = [self valueForKey:k];
+            NSDateFormatter *f = [(id)self valueForKey:k];
             if (f) f.dateFormat = withSeconds(f.dateFormat);
         }
     } @catch (__unused NSException *e) {}
@@ -27,7 +27,7 @@ static NSString *withSeconds(NSString *fmt) {
 - (void)_restartTimeItemTimer {
     %orig;
     @try {
-        NSTimer *old = [self valueForKey:@"_timeItemTimer"];
+        NSTimer *old = [(id)self valueForKey:@"_timeItemTimer"];
         if (old) [old invalidate];
         NSTimer *t = [NSTimer timerWithTimeInterval:1.0
                                              target:self
@@ -35,7 +35,7 @@ static NSString *withSeconds(NSString *fmt) {
                                            userInfo:nil
                                             repeats:YES];
         [[NSRunLoop mainRunLoop] addTimer:t forMode:NSRunLoopCommonModes];
-        [self setValue:t forKey:@"_timeItemTimer"];
+        [(id)self setValue:t forKey:@"_timeItemTimer"];
     } @catch (__unused NSException *e) {}
 }
 
