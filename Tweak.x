@@ -29,33 +29,3 @@ static NSString *withSeconds(NSString *fmt) {
     } @catch (__unused NSException *e) {}
 }
 %end
-
-// Give the status-bar clock tabular (monospaced) digits so it doesn't jitter.
-%hook _UIStatusBarStringView
-- (void)applyStyleAttributes:(id)attrs {
-    @try {
-        NSString *ot = nil;
-        @try { ot = [(id)self valueForKey:@"_originalText"]; } @catch(...){}
-        if (ot && ot.length<=12 && [ot containsString:@":"] && attrs) {
-            UIFont *f = nil;
-            @try { f = [attrs valueForKey:@"font"]; } @catch(...){}
-            if (f) {
-                UIFontDescriptor *d = [f.fontDescriptor fontDescriptorByAddingAttributes:@{
-                    UIFontDescriptorFeatureSettingsAttribute: @[@{
-                        UIFontFeatureTypeIdentifierKey: @(6),      // kNumberSpacingType
-                        UIFontFeatureSelectorIdentifierKey: @(0)   // kMonospacedNumbersSelector
-                    }]}];
-                UIFont *mono = [UIFont fontWithDescriptor:d size:f.pointSize];
-                if (mono) { @try { [attrs setValue:mono forKey:@"font"]; } @catch(...){} }
-                // one-time confirmation
-                static BOOL logged=NO;
-                if(!logged){ logged=YES;
-                    [[NSString stringWithFormat:@"HIT applyStyleAttributes ot='%@' font=%@ attrsClass=%@\n", ot, f, NSStringFromClass([attrs class])]
-                     writeToFile:@"/var/jb/tmp/mono.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                }
-            }
-        }
-    } @catch (__unused NSException *e) {}
-    %orig(attrs);
-}
-%end
