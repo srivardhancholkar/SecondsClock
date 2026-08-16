@@ -16,7 +16,6 @@ Hooks `SBStatusBarStateAggregator`:
 Prebuilt package: `releases/SecondsClock_1.0.0.deb` — open it in **Sileo** → Install → Respring.
 
 ## Build
-Pushes build a real arm64 + arm64e `.deb` on a macOS GitHub Actions runner; or on a Mac:
 `export THEOS=~/theos && make package FINALPACKAGE=1`
 
 ## Uninstall
